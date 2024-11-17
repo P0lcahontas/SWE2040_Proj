@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+              body {
+      background-image: url(/background1.png);
+      color: white;
+      }
+
+    </style>
+</head>
+<body>
+<div id="chat">
+    <input id="content" type="text" placeholder="Type a message"/>
+    <button onclick="sendMessage()">Send</button>
+    <ul id="messages"></ul>
+</div>
+
+<script>
+        let stompClient = null;
+        let userName = "";
+
+        // Assign default usernames based on sessionStorage
+        function assignUserName() {
+            // Check if this tab already has a username stored in sessionStorage
+            if (!sessionStorage.getItem("userName")) {
+                // Check for existing users in localStorage or initialize
+                let activeUsers = JSON.parse(localStorage.getItem("activeUsers")) || [];
+
+                // Generate a new username as "User" followed by the next number
+                const newUserIndex = activeUsers.length + 1;
+                userName = "User" + newUserIndex;
+
+                // Update sessionStorage and localStorage to track this new user
+                sessionStorage.setItem("userName", userName);
+                activeUsers.push(userName);
+                localStorage.setItem("activeUsers", JSON.stringify(activeUsers));
+            } else {
+                // Retrieve the username if already set in this tab's sessionStorage
+                userName = sessionStorage.getItem("userName");
+            }
+        }
+
+        // Clean up active users on tab close
+        window.addEventListener("beforeunload", () => {
+            const activeUsers = JSON.parse(localStorage.getItem("activeUsers")) || [];
+            const index = activeUsers.indexOf(userName);
+            if (index !== -1) activeUsers.splice(index, 1);
+            localStorage.setItem("activeUsers", JSON.stringify(activeUsers));
+        });
+
+        function connect() {
+            const socket = new SockJS('/chat');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (frame) {
+                stompClient.subscribe('/topic/messages', function (messageOutput) {
+                    showMessage(JSON.parse(messageOutput.body));
+                });
+            });
+        }
+
+        function sendMessage() {
+            const content = document.getElementById("content").value;
+            stompClient.send("/app/send", {}, JSON.stringify({'sender': userName, 'content': content}));
+            document.getElementById("content").value = ""; // Clear input after sending
+        }
+
+        function showMessage(message) {
+            const messages = document.getElementById("messages");
+            const messageElement = document.createElement("li");
+            messageElement.appendChild(document.createTextNode(`${message.timestamp} - ${message.sender}: ${message.content}`));
+            messages.appendChild(messageElement);
+        }
+
+        // Assign username and connect to WebSocket
+        assignUserName();
+        connect();
+    </script>
+</body>
+</html>
+
